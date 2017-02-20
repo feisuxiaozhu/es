@@ -9,8 +9,7 @@ from config import *
 
 
 def create_index(index_name, index_settings, es_host, es_port):
-    es_client = elasticsearch.client.Elasticsearch(
-        'http://{}:{}'.format(es_host, es_port))
+    es_client = elasticsearch.client.Elasticsearch('http://{}:{}'.format(es_host, es_port))
 
     if es_client.indices.exists(index=index_name):
         es_client.indices.delete(index=index_name)
@@ -19,22 +18,20 @@ def create_index(index_name, index_settings, es_host, es_port):
 
 
 
-
-
-
-
-
-
 def main():
 
-    #create_index(INDEX_NAME, index_settings, ES_HOST, ES_PORT)
+
 
 	with open(INDEX_SETTINGS_FP) as f:
-		index_sttings = json.load(f)
+	 	index_settings = json.load(f)
 
-	
-	counter=0
+	create_index(INDEX_NAME, index_settings, ES_HOST, ES_PORT)
+	es_client = elasticsearch.client.Elasticsearch(
+        'http://{}:{}'.format(ES_HOST, ES_PORT), timeout=120
+    )
+
 	documents = {}
+
 	for i in os.listdir(DATA_DIR):
 		
 		for j in os.listdir(DATA_DIR+"/"+i):
@@ -61,16 +58,25 @@ def main():
 						doc_title = ''
 				
 				
-				raw_abstract = re.search(r'<abstract>([\w\s]*)</abstract>',temp)
+				raw_abstract = re.search(r'<abstract>([\w\s\W]*)</abstract>',temp)
 				if bool(raw_abstract) == True:
 					raw_abstract = raw_abstract.group(1)
 				else:
 					raw_abstract = ''
-				# raw_body = re.search(r'<body>([\w\s\S]+)</body>',temp)
-	
-	#index_parsed_data(documents, INDEX_NAME, ES_HOST, ES_PORT)
+				
+				raw_body = re.search(r'<body>([\w\s\W]*)</body>',temp)
+				if bool(raw_body) == True:
+					raw_body = raw_body.group(1)
+				else:
+					raw_body = ''
+				
 
-
+				es_client.create(
+					index=INDEX_NAME, id=doc_pmc, doc_type='paper',
+					body={'title': doc_title, 'abstract': raw_abstract, 'pmc': doc_pmc, 'pmid':doc_pmid, 
+						  'body': raw_body
+					}
+					)
 
 
 

@@ -1,0 +1,68 @@
+{
+    "default_pmc": {
+        "settings": {
+            "analysis":{
+                "filter": {
+                    "possessive": {
+                        "type": "stemmer",
+                        "name": "possessive_english"
+                    },
+                    "stopwords": {
+                        "type": "stop",
+                        "stopwords": "_english_"
+                    }
+                },
+                "analyzer": {
+                    "pubmed-analyzer": {
+                        "tokenizer": "standard",
+                        "filter": [
+                            "possessive",
+                            "lowercase",
+                            "asciifolding",
+                            "stopwords"
+                        ]
+                    }
+                }
+            }
+        },
+         "mappings": {
+            "paper": {
+                "properties": {
+                    "title": {
+                        "type": "string",
+                        "similarity": "DFR",
+                        "store": true,
+                        "analyzer": "pubmed-analyzer"
+                    },
+                    "abstract": {
+                        "type": "string",
+                        "similarity": "DFR",
+                        "store": true,
+                        "analyzer": "pubmed-analyzer"
+                    },
+                    "body": {
+                        "type": "string",
+                        "similarity": "DFR",
+                        "store": true,
+                        "analyzer": "pubmed-analyzer"
+                    },
+                    "pmc": {
+                        "type": "long",
+                        "index": "no",
+                        "store": true
+                    },
+                    "pmid": {
+                        "type": "long",
+                        "index": "no",
+                        "store": true
+                    },
+                    "journal": {
+                        "type": "string",
+                        "similarity": "DFR",
+                        "store": true
+                    }
+                }
+            }
+        }
+    }
+}
