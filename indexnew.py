@@ -16,11 +16,7 @@ def create_index(index_name, index_settings, es_host, es_port):
 
     es_client.indices.create(index=index_name, body=index_settings)
 
-
-
 def main():
-
-
 
 	with open(INDEX_SETTINGS_FP) as f:
 	 	index_settings = json.load(f)
@@ -77,13 +73,6 @@ def main():
 						  'body': raw_body
 					}
 					)
-
-
-
-
-
-
-
 
 if __name__ == '__main__':
     main()
