@@ -28,6 +28,8 @@ def main():
 
 	documents = {}
 
+	start_time = time()
+	counter=1
 	for i in os.listdir(DATA_DIR):
 		
 		for j in os.listdir(DATA_DIR+"/"+i):
@@ -68,11 +70,15 @@ def main():
 				
 
 				es_client.create(
-					index=INDEX_NAME, id=doc_pmc, doc_type='paper',
+					index=INDEX_NAME, id=counter, doc_type='paper',
 					body={'title': doc_title, 'abstract': raw_abstract, 'pmc': doc_pmc, 'pmid':doc_pmid, 
 						  'body': raw_body
 					}
 					)
+				counter+=1
+	end_time= time()
+
+	print(end_time-start_time)	
 
 if __name__ == '__main__':
     main()
