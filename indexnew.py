@@ -70,7 +70,7 @@ def main():
 				
 
 				es_client.create(
-					index=INDEX_NAME, id=counter, doc_type='paper',
+					index=INDEX_NAME, id=doc_pmc, doc_type='paper',
 					body={'title': doc_title, 'abstract': raw_abstract, 'pmc': doc_pmc, 'pmid':doc_pmid, 
 						  'body': raw_body
 					}
