@@ -68,14 +68,33 @@ def main():
 				else:
 					raw_body = ''
 				
+				cnt_ops=0
+				opts=[]
+				bulk_max_ops_cnt=BULK_MAX_OPS_CNT
 
-				es_client.create(
-					index=INDEX_NAME, id=doc_pmc, doc_type='paper',
-					body={'title': doc_title, 'abstract': raw_abstract, 'pmc': doc_pmc, 'pmid':doc_pmid, 
-						  'body': raw_body
-					}
-					)
-				counter+=1
+				opts.append({'create':
+					{'_index': INDEX_NAME, '_type': 'paper', '_id': doc_pmc}})
+				opts.append({'title': doc_title, 'abstract': raw_abstract, 'pmc': doc_pmc, 'pmid':doc_pmid, 
+						  'body': raw_body})
+				cnt_ops+=1
+
+				if cnt_ops==bulk_max_ops_cnt:
+					es_client.bulk(body=opts)
+
+					del opts[:]
+					cnt_ops=0
+
+				es_client.bulk(body=opts)
+
+
+
+				# es_client.create(
+				# 	index=INDEX_NAME, id=doc_pmc, doc_type='paper',
+				# 	body={'title': doc_title, 'abstract': raw_abstract, 'pmc': doc_pmc, 'pmid':doc_pmid, 
+				# 		  'body': raw_body
+				# 	}
+				# 	)
+				
 	end_time= time()
 
 	print(end_time-start_time)	
