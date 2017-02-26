@@ -41,13 +41,13 @@ def make_query_dsl(s):
 
 def search_queries(queries, index_name, es_host, es_port):
     es_client = elasticsearch.client.Elasticsearch(
-        'http://{}:{}'.format(es_host, es_port))
+        'http://{}:{}'.format(es_host, es_port), timeout=30)
 
     results={}
 
     for query in queries:
         query_dsl = make_query_dsl(query['summary'])
-        raw_results = es_client.search(index=index_name, body=query_dsl, size=100)
+        raw_results = es_client.search(index=index_name, body=query_dsl, size=1000)
         results[query['_number']]=raw_results['hits']['hits']
 
     return results
@@ -67,7 +67,7 @@ def run_treceval(results, qrels_fp, treceval_fp):
 	treceval_fp='{}_{}'.format(treceval_fp, platform_name)
 
 
-	cmd = ['./{}'.format(treceval_fp), qrels_fp, tmp_fn]
+	cmd = ['./{}'.format(treceval_fp), qrels_fp, tmp_fn, '-m', 'ndcg']
 
 	try:
 		proc = subprocess.Popen(
