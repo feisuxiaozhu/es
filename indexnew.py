@@ -33,58 +33,60 @@ def main():
 	for i in os.listdir(DATA_DIR):
 		
 		for j in os.listdir(DATA_DIR+"/"+i):
-			fp=DATA_DIR+"/"+i+"/"+j
-			with open(fp) as f:
-				temp=f.read()
 
-				doc_pmc = re.search(r'<article-id pub-id-type="pmc">(\d+)</article-id>',temp).group(1)
-				
-				doc_pmid = re.search(r'<article-id pub-id-type="pmid">(\d+)</article-id>',temp)
-				if bool(doc_pmid)==True:
-					doc_pmid = doc_pmid.group(1)
-				else:
-					doc_pmid = ''
-				
-				doc_title = re.search(r'<article-title>([\w\s]*)</article-title>',temp)
-				if bool(doc_title)==True:
-					doc_title = doc_title.group(1)
-				else:
-					doc_title = re.search(r'<journal-title>([\w\s]*)</journal-title>',temp)
+			for k in os.listdir(DATA_DIR+"/"+i+"/"+j):
+				fp=DATA_DIR+"/"+i+"/"+j+"/"+k
+				with open(fp) as f:
+					temp=f.read()
+
+					doc_pmc = re.search(r'<article-id pub-id-type="pmc">(\d+)</article-id>',temp).group(1)
+					
+					doc_pmid = re.search(r'<article-id pub-id-type="pmid">(\d+)</article-id>',temp)
+					if bool(doc_pmid)==True:
+						doc_pmid = doc_pmid.group(1)
+					else:
+						doc_pmid = ''
+					
+					doc_title = re.search(r'<article-title>([\w\s]*)</article-title>',temp)
 					if bool(doc_title)==True:
 						doc_title = doc_title.group(1)
 					else:
-						doc_title = ''
-				
-				
-				raw_abstract = re.search(r'<abstract>([\w\s\W]*)</abstract>',temp)
-				if bool(raw_abstract) == True:
-					raw_abstract = raw_abstract.group(1)
-				else:
-					raw_abstract = ''
-				
-				raw_body = re.search(r'<body>([\w\s\W]*)</body>',temp)
-				if bool(raw_body) == True:
-					raw_body = raw_body.group(1)
-				else:
-					raw_body = ''
-				
-				cnt_ops=0
-				opts=[]
-				bulk_max_ops_cnt=BULK_MAX_OPS_CNT
-
-				opts.append({'create':
-					{'_index': INDEX_NAME, '_type': 'paper', '_id': doc_pmc}})
-				opts.append({'title': doc_title, 'abstract': raw_abstract, 'pmc': doc_pmc, 'pmid':doc_pmid, 
-						  'body': raw_body})
-				cnt_ops+=1
-
-				if cnt_ops==bulk_max_ops_cnt:
-					es_client.bulk(body=opts)
-
-					del opts[:]
+						doc_title = re.search(r'<journal-title>([\w\s]*)</journal-title>',temp)
+						if bool(doc_title)==True:
+							doc_title = doc_title.group(1)
+						else:
+							doc_title = ''
+					
+					
+					raw_abstract = re.search(r'<abstract>([\w\s\W]*)</abstract>',temp)
+					if bool(raw_abstract) == True:
+						raw_abstract = raw_abstract.group(1)
+					else:
+						raw_abstract = ''
+					
+					raw_body = re.search(r'<body>([\w\s\W]*)</body>',temp)
+					if bool(raw_body) == True:
+						raw_body = raw_body.group(1)
+					else:
+						raw_body = ''
+					
 					cnt_ops=0
+					opts=[]
+					bulk_max_ops_cnt=BULK_MAX_OPS_CNT
 
-				es_client.bulk(body=opts)
+					opts.append({'create':
+						{'_index': INDEX_NAME, '_type': 'paper', '_id': doc_pmc}})
+					opts.append({'title': doc_title, 'abstract': raw_abstract, 'pmc': doc_pmc, 'pmid':doc_pmid, 
+							  'body': raw_body})
+					cnt_ops+=1
+
+					if cnt_ops==bulk_max_ops_cnt:
+						es_client.bulk(body=opts)
+
+						del opts[:]
+						cnt_ops=0
+
+					es_client.bulk(body=opts)
 
 
 
