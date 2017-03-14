@@ -7,9 +7,15 @@ from tempfile import NamedTemporaryFile
 import elasticsearch 
 from config import *
 
+import sys
+sys.path.insert(0, '/home/ubuntu/Desktop/QuickUMLS')
+
+from quickumls import *
+
 def parse_raw_queires(raw_data):
 	queires = []
 	raw_queries = re.split(r'</topic>',raw_data)
+	matcher = QuickUMLS('umlsdata/')
 
 	for raw_query in raw_queries:
 
@@ -18,25 +24,99 @@ def parse_raw_queires(raw_data):
 			q_number=q_number.group(1)		
 			q_description = re.search(r'<description>([\s\w\W]+)</description>',raw_query).group(1)
 			q_summary = re.search(r'<summary>([\s\w\W]+)</summary>',raw_query).group(1)
+			q_summaryumls = matcher.match(q_summary)
+			b=''
+			for i in q_summaryumls:		
+				b = b+i[0]['term']+" "
+			q_summaryumls = b
 
+			b=''
+			q_descriptionumls=matcher.match(q_description)
+			for i in q_descriptionumls:
+				b = b+i[0]['term']+ " "
+			q_descriptionumls=b
+			q_summarydescriptionumls = q_summary + " "+ q_descriptionumls
+			q_summaryumlsdescriptionumls = q_summaryumls +" "+ q_descriptionumls
 			queires.append(
-			{'_number': q_number, 'description': q_description, 'summary': q_summary})
+			{'_number': q_number, 'description': q_description, 'summary': q_summary,
+			'summaryumls': q_summaryumls,'descriptionumls':q_descriptionumls,
+			'summarydescriptionumls': q_summarydescriptionumls,
+			'summaryumlsdescriptionumls': q_summaryumlsdescriptionumls})
 		
 	return queires
 
 def make_query_dsl(s):
 
+    #single field query
+    # query = {
+    #     #'fields': [],
+    #     'query': {
+    #         'match': {
+    #             'body': {
+    #                 'query': s,
+    #                 'operator': 'or'
+    #             }
+
+    #         }
+    #     }
+    # }
+
+    #multiple fields query
     query = {
         #'fields': [],
         'query': {
-            'match': {
-                'abstract': {
-                    'query': s,
-                    'operator': 'or'
-                }
-            }
+            'bool': {
+                'should': [{
+                    'match': {
+                		'body': {
+                    		'query': s,
+                    		'operator': 'or'
+                		}
+                	}
+            	},{
+            		'match': {
+                		'abstract': {
+                    		'query': s,
+                    		'operator': 'or'
+                		}
+                	}
+            	}
+
+        		]
+            	}
         }
     }
+
+    #multiple fields with boost on body
+    # query = {
+    #     #'fields': [],
+    #     'query': {
+    #         'bool': {
+    #             'should': [{
+    #                 'match': {
+    #             		'body': {
+    #                 		'query': s,
+    #                 		"boost": 8,
+    #                 		'operator': 'or'
+
+    #             		}
+    #             	}
+    #         	},{
+    #         		'match': {
+    #             		'abstract': {
+    #                 		'query': s,
+    #                 		'operator': 'or'
+    #             		}
+    #             	}
+    #         	}
+
+    #     		]
+    #         	}
+    #     }
+    # }  
+
+
+        
     return query
 
 def search_queries(queries, index_name, es_host, es_port):
@@ -46,7 +126,7 @@ def search_queries(queries, index_name, es_host, es_port):
     results={}
 
     for query in queries:
-        query_dsl = make_query_dsl(query['summary'])
+        query_dsl = make_query_dsl(query['summaryumlsdescriptionumls'])
         raw_results = es_client.search(index=index_name, body=query_dsl, size=1000)
         results[query['_number']]=raw_results['hits']['hits']
 
