@@ -12,6 +12,8 @@ sys.path.insert(0, '/home/ubuntu/Desktop/QuickUMLS')
 
 from quickumls import *
 
+from collections import Counter
+
 def parse_raw_queires(raw_data):
 	queires = []
 	raw_queries = re.split(r'</topic>',raw_data)
@@ -47,90 +49,114 @@ def parse_raw_queires(raw_data):
 
 def make_query_dsl(s):
 
-    #single field query
-    # query = {
-    #     #'fields': [],
-    #     'query': {
-    #         'match': {
-    #             'body': {
-    #                 'query': s,
-    #                 'operator': 'or'
-    #             }
+	#single field query
+	# query = {
+	#     #'fields': [],
+	#     'query': {
+	#         'match': {
+	#             'body': {
+	#                 'query': s,
+	#                 'operator': 'or'
+	#             }
 
-    #         }
-    #     }
-    # }
+	#         }
+	#     }
+	# }
 
-    #multiple fields query
-    query = {
-        #'fields': [],
-        'query': {
-            'bool': {
-                'should': [{
-                    'match': {
-                		'body': {
-                    		'query': s,
-                    		'operator': 'or'
-                		}
-                	}
-            	},{
-            		'match': {
-                		'abstract': {
-                    		'query': s,
-                    		'operator': 'or'
-                		}
-                	}
-            	}
+	#multiple fields query
+	query = {
+		#'fields': [],
+		'query': {
+			'bool': {
+				'should': [{
+					'match': {
+						'body': {
+							'query': s,
+							'operator': 'or'
+						}
+					}
+				},{
+					'match': {
+						'abstract': {
+							'query': s,
+							'operator': 'or'
+						}
+					}
+				}
 
-        		]
-            	}
-        }
-    }
+				]
+				}
+		}
+	}
 
-    #multiple fields with boost on body
-    # query = {
-    #     #'fields': [],
-    #     'query': {
-    #         'bool': {
-    #             'should': [{
-    #                 'match': {
-    #             		'body': {
-    #                 		'query': s,
-    #                 		"boost": 8,
-    #                 		'operator': 'or'
+	#multiple fields with boost on body
+	# query = {
+	#     #'fields': [],
+	#     'query': {
+	#         'bool': {
+	#             'should': [{
+	#                 'match': {
+	#             		'body': {
+	#                 		'query': s,
+	#                 		"boost": 10,
+	#                 		'operator': 'or'
 
-    #             		}
-    #             	}
-    #         	},{
-    #         		'match': {
-    #             		'abstract': {
-    #                 		'query': s,
-    #                 		'operator': 'or'
-    #             		}
-    #             	}
-    #         	}
+	#             		}
+	#             	}
+	#         	},{
+	#         		'match': {
+	#             		'abstract': {
+	#                 		'query': s,
+	#                 		'operator': 'or'
+	#             		}
+	#             	}
+	#         	}
 
-    #     		]
-    #         	}
-    #     }
-    # }  
+	#     		]
+	#         	}
+	#     }
+	# }  
 
 
-        
-    return query
+
+	return query
 
 def search_queries(queries, index_name, es_host, es_port):
-    es_client = elasticsearch.client.Elasticsearch(
-        'http://{}:{}'.format(es_host, es_port), timeout=30)
+	es_client = elasticsearch.client.Elasticsearch(
+		'http://{}:{}'.format(es_host, es_port), timeout=30)
 
-    results={}
+	results={}
 
-    for query in queries:
-        query_dsl = make_query_dsl(query['summaryumlsdescriptionumls'])
-        raw_results = es_client.search(index=index_name, body=query_dsl, size=1000)
-        results[query['_number']]=raw_results['hits']['hits']
+	for query in queries:
+		query_dsl = make_query_dsl(query['summaryumlsdescriptionumls'])
+		raw_results = es_client.search(index=index_name, body=query_dsl, size=1000)
+		results[query['_number']]=raw_results['hits']['hits']
 
-    return results
+	
+
+	return results
+
+def pseudo_feedback(queries, index_name, es_host, es_port):
+	es_client = elasticsearch.client.Elasticsearch(
+		'http://{}:{}'.format(es_host,es_port),timeout=30)
+	results={}
+
+	for query in queries:
+		query_dsl = make_query_dsl(query['summaryumlsdescriptionumls'])
+		raw_results = es_client.search(index=index_name, body=query_dsl, size=10)
+		results[query['_number']]=raw_results['hits']['hits']
+
+
+		temp=""	
+		for i in results[query['_number']]:
+			temp = temp + i['_source']['body'] + " "
+		words = re.findall(r'\w+', temp)
+		dict = Counter(words).most_common(100)
+
+		results[query['_number']] = dict
+
+
+
 
 def run_treceval(results, qrels_fp, treceval_fp):
 
@@ -151,7 +177,7 @@ def run_treceval(results, qrels_fp, treceval_fp):
 
 	try:
 		proc = subprocess.Popen(
-            cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+			cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 		resp = proc.communicate()
 		msg_out, msg_err = (msg.decode('utf-8') for msg in resp)
 
@@ -167,11 +193,13 @@ def main():
 	with open(QUERIES_FP) as f:
 		queries = parse_raw_queires(f.read())
 
-	results = search_queries(queries,INDEX_NAME, ES_HOST, ES_PORT)
-	output_treceval =  run_treceval(results, QRELS_FP, TRECEVAL_FP)
-	print(output_treceval)
+	pseudo_feedback(queries,INDEX_NAME,ES_HOST,ES_PORT)
+	# results = search_queries(queries,INDEX_NAME, ES_HOST, ES_PORT)
+
+	# output_treceval =  run_treceval(results, QRELS_FP, TRECEVAL_FP)
+	# print(output_treceval)
 
 
 
 if __name__ == '__main__':
-    main()
+	main()
