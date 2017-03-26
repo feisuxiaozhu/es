@@ -13,6 +13,8 @@ sys.path.insert(0, '/home/ubuntu/Desktop/QuickUMLS')
 from quickumls import *
 
 from collections import Counter
+from collections import defaultdict
+import math
 
 def parse_raw_queires(raw_data):
 	queires = []
@@ -64,6 +66,32 @@ def make_query_dsl(s):
 	# }
 
 	#multiple fields query
+	# query = {
+	# 	#'fields': [],
+	# 	'query': {
+	# 		'bool': {
+	# 			'should': [{
+	# 				'match': {
+	# 					'body': {
+	# 						'query': s,
+	# 						'operator': 'or'
+	# 					}
+	# 				}
+	# 			},{
+	# 				'match': {
+	# 					'abstract': {
+	# 						'query': s,
+	# 						'operator': 'or'
+	# 					}
+	# 				}
+	# 			}
+
+	# 			]
+	# 			}
+	# 	}
+	# }
+
+	#multiple fields with boost on body
 	query = {
 		#'fields': [],
 		'query': {
@@ -72,7 +100,9 @@ def make_query_dsl(s):
 					'match': {
 						'body': {
 							'query': s,
+							"boost": 10,
 							'operator': 'or'
+
 						}
 					}
 				},{
@@ -87,35 +117,7 @@ def make_query_dsl(s):
 				]
 				}
 		}
-	}
-
-	#multiple fields with boost on body
-	# query = {
-	#     #'fields': [],
-	#     'query': {
-	#         'bool': {
-	#             'should': [{
-	#                 'match': {
-	#             		'body': {
-	#                 		'query': s,
-	#                 		"boost": 10,
-	#                 		'operator': 'or'
-
-	#             		}
-	#             	}
-	#         	},{
-	#         		'match': {
-	#             		'abstract': {
-	#                 		'query': s,
-	#                 		'operator': 'or'
-	#             		}
-	#             	}
-	#         	}
-
-	#     		]
-	#         	}
-	#     }
-	# }  
+	}  
 
 
 
@@ -141,6 +143,7 @@ def pseudo_feedback(queries, index_name, es_host, es_port):
 		'http://{}:{}'.format(es_host,es_port),timeout=30)
 	results={}
 
+
 	for query in queries:
 		query_dsl = make_query_dsl(query['summaryumlsdescriptionumls'])
 		raw_results = es_client.search(index=index_name, body=query_dsl, size=10)
@@ -151,9 +154,25 @@ def pseudo_feedback(queries, index_name, es_host, es_port):
 		for i in results[query['_number']]:
 			temp = temp + i['_source']['body'] + " "
 		words = re.findall(r'\w+', temp)
-		dict = Counter(words).most_common(100)
+		dict_temp = Counter(words).most_common(100) #find the most frequent term in top retrieved docs
+		
+		#find the df for top terms
+		dict_df={}
+		for x, y in dict_temp:
+			count = 0
+			for i in results[query['_number']]:
+				if x in i['_source']['body']:
+					count += 1
+			dict_df[x]=count
 
-		results[query['_number']] = dict
+		#calculate idf for top terms
+		dict_idf={}
+		for x, y in dict_temp:
+			df = dict_df[x]
+			idf = math.log10(11/(1+df))
+
+
+
 
 
 
@@ -173,21 +192,20 @@ def run_treceval(results, qrels_fp, treceval_fp):
 	treceval_fp='{}_{}'.format(treceval_fp, platform_name)
 
 
-	cmd = ['./{}'.format(treceval_fp), qrels_fp, tmp_fn, '-m', 'ndcg']
+	# cmd = ['./{}'.format(treceval_fp), qrels_fp, tmp_fn]
+	# try:
+	# 	proc = subprocess.Popen(
+	# 		cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+	# 	resp = proc.communicate()
+	# 	msg_out, msg_err = (msg.decode('utf-8') for msg in resp)
 
-	try:
-		proc = subprocess.Popen(
-			cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-		resp = proc.communicate()
-		msg_out, msg_err = (msg.decode('utf-8') for msg in resp)
+	# except Exception:
+	# 	raise
+	# finally:
+	# 	os.remove(tmp_fn)
 
-	except Exception:
-		raise
-	finally:
-		os.remove(tmp_fn)
-
-	return msg_out.strip()
-
+	# return msg_out.strip()
+	pipe = subprocess.Popen(["perl", "./bin/trec_eval_Linux", qrels_fp, tmp_fn])
 
 def main():
 	with open(QUERIES_FP) as f:
