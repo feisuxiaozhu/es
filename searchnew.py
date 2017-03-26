@@ -15,6 +15,7 @@ from quickumls import *
 from collections import Counter
 from collections import defaultdict
 import math
+import operator 
 
 def parse_raw_queires(raw_data):
 	queires = []
@@ -48,50 +49,7 @@ def parse_raw_queires(raw_data):
 			'summaryumlsdescriptionumls': q_summaryumlsdescriptionumls})
 		
 	return queires
-
-def make_query_dsl(s):
-
-	#single field query
-	# query = {
-	#     #'fields': [],
-	#     'query': {
-	#         'match': {
-	#             'body': {
-	#                 'query': s,
-	#                 'operator': 'or'
-	#             }
-
-	#         }
-	#     }
-	# }
-
-	#multiple fields query
-	# query = {
-	# 	#'fields': [],
-	# 	'query': {
-	# 		'bool': {
-	# 			'should': [{
-	# 				'match': {
-	# 					'body': {
-	# 						'query': s,
-	# 						'operator': 'or'
-	# 					}
-	# 				}
-	# 			},{
-	# 				'match': {
-	# 					'abstract': {
-	# 						'query': s,
-	# 						'operator': 'or'
-	# 					}
-	# 				}
-	# 			}
-
-	# 			]
-	# 			}
-	# 	}
-	# }
-
-	#multiple fields with boost on body
+def make_pseudo_query_dsl(s):
 	query = {
 		#'fields': [],
 		'query': {
@@ -122,15 +80,49 @@ def make_query_dsl(s):
 
 
 	return query
+def make_query_dsl(s,t):
+
+	query = {
+		#'fields': [],
+		'query': {
+			'bool': {
+				'should': [{
+					'match': {
+						'body': {
+							'query': s,
+							"boost": 10,
+							'operator': 'or'
+
+						}
+					}
+				},{
+					'match': {
+						'abstract': {
+							'query': t,
+							'operator': 'or'
+						}
+					}
+				}
+
+				]
+				}
+		}
+	}  
+
+
+
+	return query
 
 def search_queries(queries, index_name, es_host, es_port):
+	#first return pseudo feedback
+	prf_results = pseudo_feedback(queries, index_name, es_host, es_port)
 	es_client = elasticsearch.client.Elasticsearch(
 		'http://{}:{}'.format(es_host, es_port), timeout=30)
 
 	results={}
 
 	for query in queries:
-		query_dsl = make_query_dsl(query['summaryumlsdescriptionumls'])
+		query_dsl = make_query_dsl(query['summarydescriptionumls'],prf_results[query['_number']])
 		raw_results = es_client.search(index=index_name, body=query_dsl, size=1000)
 		results[query['_number']]=raw_results['hits']['hits']
 
@@ -145,20 +137,20 @@ def pseudo_feedback(queries, index_name, es_host, es_port):
 
 
 	for query in queries:
-		query_dsl = make_query_dsl(query['summaryumlsdescriptionumls'])
+		query_dsl = make_pseudo_query_dsl(query['summarydescriptionumls'])
 		raw_results = es_client.search(index=index_name, body=query_dsl, size=10)
 		results[query['_number']]=raw_results['hits']['hits']
 
-
+		#find top words from top 10 retrieved docs
 		temp=""	
 		for i in results[query['_number']]:
 			temp = temp + i['_source']['body'] + " "
 		words = re.findall(r'\w+', temp)
-		dict_temp = Counter(words).most_common(100) #find the most frequent term in top retrieved docs
+		dict_tf = Counter(words).most_common(100) 
 		
 		#find the df for top terms
 		dict_df={}
-		for x, y in dict_temp:
+		for x, y in dict_tf:
 			count = 0
 			for i in results[query['_number']]:
 				if x in i['_source']['body']:
@@ -167,14 +159,54 @@ def pseudo_feedback(queries, index_name, es_host, es_port):
 
 		#calculate idf for top terms
 		dict_idf={}
-		for x, y in dict_temp:
+		for x, y in dict_tf:
 			df = dict_df[x]
 			idf = math.log10(11/(1+df))
+			dict_idf[x] = idf
+
+		#find if term appear in query
+		dict_query={}
+		for x, y in dict_tf:
+			if x in query['summaryumlsdescriptionumls']:
+				dict_query[x]=1
+			else:
+				dict_query[x]=0
+
+		#give different weight to terms based on idf
+		dict_return={}
+		for x,y in dict_tf:
+			weight = 2*dict_query[x]*y +0.075*dict_df[x]* dict_idf[x]
+			dict_return[x] = weight
+		#dict_return=sorted(dict_return.items(), key=operator.itemgetter(1))
+
+		#clean the dictionary's integer entry and entries of length less than 5
+		temp=[]
+		for key, value in dict_return.items():
+			if len(key)<5:
+				temp.append(key)
+			if hasNumbers(key):
+				temp.append(key)
+
+		evil_words=['right','lower','center','italic','align','caption','Table']
+		temp=temp+evil_words
+		for x in temp:
+			if x in dict_return.keys():
+				dict_return.pop(x)
+
+		#output the top terms in dict_return
+		temp = ''
+		for x,y in Counter(dict_return).most_common(10):
+			temp = temp + x +' '
+
+		results[query['_number']]=temp
+
+	return results
+		
 
 
 
-
-
+def hasNumbers(inputString):
+	return any(char.isdigit() for char in inputString)
 
 
 def run_treceval(results, qrels_fp, treceval_fp):
@@ -211,11 +243,12 @@ def main():
 	with open(QUERIES_FP) as f:
 		queries = parse_raw_queires(f.read())
 
-	pseudo_feedback(queries,INDEX_NAME,ES_HOST,ES_PORT)
-	# results = search_queries(queries,INDEX_NAME, ES_HOST, ES_PORT)
+	#pseudo_feedback(queries,INDEX_NAME,ES_HOST,ES_PORT)
 
-	# output_treceval =  run_treceval(results, QRELS_FP, TRECEVAL_FP)
-	# print(output_treceval)
+	results = search_queries(queries,INDEX_NAME, ES_HOST, ES_PORT)
+
+	output_treceval =  run_treceval(results, QRELS_FP, TRECEVAL_FP)
+	print(output_treceval)
 
 
 
